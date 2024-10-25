@@ -13,6 +13,8 @@ import javax.xml.bind.Unmarshaller;
 import javax.xml.namespace.QName;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.ws.handler.Handler;
+import javax.xml.ws.handler.MessageContext;
 
 import org.apache.cxf.Bus;
 import org.apache.cxf.BusFactory;
@@ -93,6 +95,7 @@ public class CustomListener implements MessageListener{
 //		factory.setServiceName(new QName("ConsumerService"));
 		factory.setServiceBean(new ConsumerServiceImpl());
         factory.setAddress("local://ConsumerService"); // Use local address
+        factory.getHandlers().add(new LoggingHandler());
 //		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
 //		factory.setHandlers(null);
 //		factory.setBus(BusFactory.newInstance().createBus());
@@ -150,7 +153,7 @@ public class CustomListener implements MessageListener{
 //			e.printStackTrace();
 //		}
 		
-//		s.start();
+		s.start();
 	}
 	
 	private ConsumerService lookupService() {
@@ -222,11 +225,5 @@ public class CustomListener implements MessageListener{
 //		return endpointInfo;
 //	}
 
-	public class MyMessageObserver implements MessageObserver {
 
-		public void onMessage(org.apache.cxf.message.Message message) {
-			// TODO Auto-generated method stub
-	        System.out.println("Received message: " + message);
-		}
-	}
 }
