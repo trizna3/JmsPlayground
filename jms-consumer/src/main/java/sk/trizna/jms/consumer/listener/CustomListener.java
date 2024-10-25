@@ -1,229 +1,157 @@
 package sk.trizna.jms.consumer.listener;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
+import javax.jms.Connection;
+import javax.jms.ConnectionFactory;
 import javax.jms.Message;
 import javax.jms.MessageListener;
+import javax.jms.MessageProducer;
+import javax.jms.Session;
 import javax.jms.TextMessage;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBElement;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
-import javax.xml.namespace.QName;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.ws.handler.Handler;
-import javax.xml.ws.handler.MessageContext;
+import javax.xml.soap.MessageFactory;
+import javax.xml.soap.SOAPBody;
+import javax.xml.soap.SOAPElement;
+import javax.xml.soap.SOAPException;
+import javax.xml.soap.SOAPMessage;
 
-import org.apache.cxf.Bus;
-import org.apache.cxf.BusFactory;
-import org.apache.cxf.endpoint.Server;
+import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.cxf.jaxws.JaxWsProxyFactoryBean;
 import org.apache.cxf.jaxws.JaxWsServerFactoryBean;
-import org.apache.cxf.service.model.EndpointInfo;
-import org.apache.cxf.service.model.ServiceInfo;
-import org.apache.cxf.transport.ConduitInitiatorManager;
-import org.apache.cxf.transport.Destination;
-import org.apache.cxf.transport.DestinationFactoryManager;
-import org.apache.cxf.transport.MessageObserver;
-import org.apache.cxf.transport.jms.spec.JMSSpecConstants;
-import org.apache.cxf.transport.local.LocalConduit;
-import org.apache.cxf.transport.local.LocalDestination;
-import org.apache.cxf.transport.local.LocalTransportFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 
 import sk.trizna.jms.consumer.dto.MyRequestDto;
+import sk.trizna.jms.consumer.dto.MyResponseDto;
 import sk.trizna.jms.consumer.service.ConsumerService;
 import sk.trizna.jms.consumer.service.ConsumerServiceImpl;
 
 public class CustomListener implements MessageListener{
 
-//	private Bus localBus;
-//	private MyMessageObserver messageObserver;
-//	private EndpointInfo endpointInfo;
+	private ConnectionFactory connectionFactory;
+	private ConsumerService serviceProxy;
+	private MessageFactory soapMessageFactory;
+	private Marshaller respMarshaller;
+	private Unmarshaller reqUnmarshaller;
+	
+	public CustomListener(ConnectionFactory connectionFactory) {
+		super();
+		this.connectionFactory = connectionFactory;
+		createService();
+	}
 	
 	public void onMessage(Message message) {
+		Long currMillis = System.currentTimeMillis();
 		try {
 			if (message instanceof TextMessage) {
 				String messageText = ((TextMessage) message).getText();
 				System.out.println("Accepted message: " + messageText);
-	            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-	    		DocumentBuilder builder = factory.newDocumentBuilder();
-	    		Document document = builder.parse(new ByteArrayInputStream(messageText.getBytes(StandardCharsets.UTF_8)));
-	    		Element envelopeElement = document.getDocumentElement();
-	    		NamedNodeMap attributes = envelopeElement.getAttributes();
-	            for (int i = 0; i < attributes.getLength(); i++) {
-	                Node attribute = attributes.item(i);
-	                System.out.println("envelope namespace: " + attribute.getNodeValue());
-	            }
+				SOAPMessage soapMessage = getSoapMessageFactory().createMessage(null, new ByteArrayInputStream(messageText.getBytes()));
+				Node requestElement = soapMessage.getSOAPBody().getFirstChild();
+	            System.out.println("request namespace: " + requestElement.getNamespaceURI());
 	            
-	            Node bodyElement = envelopeElement.getChildNodes().item(1);
-	            attributes = bodyElement.getAttributes();
-	            for (int i = 0; i < attributes.getLength(); i++) {
-	                Node attribute = attributes.item(i);
-	                System.out.println("body namespace: " + attribute.getNodeValue());
-	            }
-	            
-	            Node requestElement = bodyElement.getFirstChild();
-	            attributes = requestElement.getAttributes();
-	            for (int i = 0; i < attributes.getLength(); i++) {
-	                Node attribute = attributes.item(i);
-	                System.out.println("request namespace: " + attribute.getNodeValue());
-	            }
-	            
-	            JAXBContext jaxbContext = JAXBContext.newInstance(MyRequestDto.class);
-                Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
-                JAXBElement<MyRequestDto> request = unmarshaller.unmarshal(requestElement, MyRequestDto.class);
-                System.out.println(request.getValue());
+                JAXBElement<MyRequestDto> request = getReqUnmarshaller().unmarshal(requestElement, MyRequestDto.class);
                 
-                createService();
-                ConsumerService service = lookupService();
-                service.manage(request.getValue());
+                // invoke service
+                Object response = getServiceProxy().sayHello(request.getValue());
+                
+                sendResponse(((ActiveMQQueue)message.getJMSReplyTo()).getQueueName(),marshallResponse(response));
 	        }
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
+		System.out.println("Message processed in " + (System.currentTimeMillis()-currMillis) + " millis");
+	}
+	
+	private Object marshallResponse(Object o) throws JAXBException, SOAPException, IOException {
+		
+		// create empty soap envelope
+        SOAPMessage soapMessage = getSoapMessageFactory().createMessage();
+        SOAPBody soapBody = soapMessage.getSOAPBody();
+        
+        // create soap body & marshall response object into it
+        SOAPElement responseElement = soapBody.addBodyElement(
+        		soapMessage.getSOAPPart().getEnvelope().createName("MyResponseDto", "urn", "http://example.com/")
+        		);
+        getRespMarshaller().marshal(o, responseElement);
+
+        // marshall SOAPMessage (soap envelope) into xml string
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        soapMessage.writeTo(outputStream);
+        return new String(outputStream.toByteArray(), StandardCharsets.UTF_8);
+	}
+	
+	private void sendResponse(String replyToQueue, Object response) {
+	    try {
+            // Create a Connection
+            Connection connection = connectionFactory.createConnection();
+            connection.start();
+            
+            // Create a Session
+            Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+            
+            // Create a MessageProducer
+            MessageProducer producer = session.createProducer(session.createQueue(replyToQueue));
+            
+            // Create a message
+            TextMessage message = session.createTextMessage(String.valueOf(response));
+            // Send the message
+            producer.send(message);
+            System.out.println("Response sent: " + message.getText());
+	    } catch (Exception e) {
+	        e.printStackTrace();
+	    }
 	}
 	
 	private void createService() {
+		// create service
 		JaxWsServerFactoryBean factory = new JaxWsServerFactoryBean();
 		factory.setServiceClass(ConsumerService.class);
-//		factory.setServiceName(new QName("ConsumerService"));
 		factory.setServiceBean(new ConsumerServiceImpl());
-        factory.setAddress("local://ConsumerService"); // Use local address
+        factory.setAddress("local://ConsumerService");
         factory.getHandlers().add(new LoggingHandler());
-//		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
-//		factory.setHandlers(null);
-//		factory.setBus(BusFactory.newInstance().createBus());
-		// register local transport on bus
+        factory.create();
 		
-//		Bus localBus = BusFactory.newInstance().createBus();
-//		localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
-//		
-//		LocalTransportFactory transportFactory = new LocalTransportFactory();
-//		DestinationFactoryManager dfm = localBus.getExtension(DestinationFactoryManager.class);
-//		dfm.registerDestinationFactory(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-//		ConduitInitiatorManager cim = localBus.getExtension(ConduitInitiatorManager.class);
-//		cim.registerConduitInitiator(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-//		// interceptors for conduit selection
-//		factory.getOutInterceptors().add(new ConduitSetterInterceptor());
-//		factory.getOutFaultInterceptors().add(new ConduitSetterInterceptor());
-//		
-//		factory.setBus(localBus);
+		// create proxy to that service
+		JaxWsProxyFactoryBean proxyFactory = new JaxWsProxyFactoryBean();
+		proxyFactory.setServiceClass(ConsumerService.class);
+		proxyFactory.setAddress("local://ConsumerService");
+        serviceProxy = (ConsumerService) proxyFactory.create();
 		
-		// create & start
-		Server s = factory.create();
-		
-//		try {
-//			ServiceInfo serviceInfo = new ServiceInfo();
-//	        EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-//	        endpointInfo.setAddress("local://ConsumerService");
-//			Destination destination = transportFactory.getDestination(endpointInfo, localBus);
-//			destination.setMessageObserver(new MyMessageObserver());
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//		}
-		
-//		Endpoint endpoint = s.getEndpoint();
-//		EndpointImpl endpointImpl = (EndpointImpl) endpoint;
-//		endpointImpl.setMessageObserver(new MyMessageObserver());
-//		try {
-//			ServiceInfo serviceInfo = new ServiceInfo();
-//	
-//	        // Create EndpointInfo for your service
-//	        EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-//	
-//	        // Create LocalTransportFactory
-//	        LocalTransportFactory localTransport = new LocalTransportFactory();
-//	
-//	        // Get the destination
-//	        LocalDestination destination;
-//			
-//			destination = (LocalDestination) localTransport.getDestination(endpointInfo, localBus);
-//		
-//	        // Create and set the MessageObserver
-//	        MyMessageObserver observer = new MyMessageObserver();
-//	        destination.setMessageObserver(observer);
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-		
-		s.start();
 	}
 	
-	private ConsumerService lookupService() {
-		JaxWsProxyFactoryBean factory = new JaxWsProxyFactoryBean();
-		factory.setServiceClass(ConsumerService.class);
-//		factory.setServiceName(new QName("ConsumerService"));
-        factory.setAddress("local://ConsumerService"); // Use local address
-//		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
-		
-//		Bus localBus = BusFactory.newInstance().createBus();
-//		localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
-//		
-//		LocalTransportFactory transportFactory = new LocalTransportFactory();
-//		DestinationFactoryManager dfm = localBus.getExtension(DestinationFactoryManager.class);
-//		dfm.registerDestinationFactory(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-//		ConduitInitiatorManager cim = localBus.getExtension(ConduitInitiatorManager.class);
-//		cim.registerConduitInitiator(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-//		
-//		// interceptors for conduit selection
-//		factory.getOutInterceptors().add(new ConduitSetterInterceptor());
-//		factory.getOutFaultInterceptors().add(new ConduitSetterInterceptor());
-//		
-//		factory.setBus(localBus);
-		
-		ConsumerService service = (ConsumerService) factory.create();
-		
-//		try {
-//			ServiceInfo serviceInfo = new ServiceInfo();
-//			EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-//			endpointInfo.setAddress("local://ConsumerService");
-//			Destination destination = transportFactory.getDestination(endpointInfo, localBus);
-//			destination.setMessageObserver(new MyMessageObserver());
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//		}
-		
-//		try {
-//			ServiceInfo serviceInfo = new ServiceInfo();
-//			EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-//			transportFactory.getDestination(endpointInfo, localBus);
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-		System.out.println();
-		return service;
+	private ConsumerService getServiceProxy() {
+		return serviceProxy;
 	}
 	
-//	private Bus getLocalBus() {
-//		if (localBus == null) {
-//			localBus = BusFactory.newInstance().createBus();
-//			localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
-//		}
-//		return localBus;
-//	}
-//	
-//	private MessageObserver getMessageObserver() {
-//		if (messageObserver == null) {
-//			messageObserver = new MyMessageObserver();
-//		}
-//		return messageObserver;
-//	}
-//	
-//	public EndpointInfo getEndpointInfo() {
-//		if (endpointInfo == null) {
-//			ServiceInfo serviceInfo = new ServiceInfo();
-//	        endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-//		}
-//		return endpointInfo;
-//	}
-
-
+	private MessageFactory getSoapMessageFactory() throws SOAPException {
+		if (soapMessageFactory == null) {
+			soapMessageFactory = MessageFactory.newInstance();
+		}
+		return soapMessageFactory;
+	}
+	
+	private Marshaller getRespMarshaller() throws JAXBException {
+		if (respMarshaller == null) {
+			JAXBContext jaxbContext = JAXBContext.newInstance(MyResponseDto.class);
+			respMarshaller = jaxbContext.createMarshaller();
+			respMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+		}
+		return respMarshaller;
+	}
+	
+	private Unmarshaller getReqUnmarshaller() throws JAXBException {
+		if (reqUnmarshaller == null) {
+			JAXBContext jaxbContext = JAXBContext.newInstance(MyRequestDto.class);
+			reqUnmarshaller = jaxbContext.createUnmarshaller();
+		}
+		return reqUnmarshaller;
+	}
 }

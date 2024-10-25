@@ -30,7 +30,8 @@ public class ProducerController {
             Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
             
             // Create a Destination (Queue or Topic)
-            Destination destination = session.createQueue("TEST.QUEUE");
+            Destination destination = session.createQueue("TEST.QUEUE_REQ");
+            Destination replyDestination = session.createQueue("TEST.QUEUE_RESP");
             
             // Create a MessageProducer
             MessageProducer producer = session.createProducer(destination);
@@ -38,10 +39,10 @@ public class ProducerController {
             // Create a message
 //            TextMessage message = session.createTextMessage("<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:urn=\"urn:tatrabanka:ESB:services:SRContactApi:002\" xmlns:urn1=\"urn:tatrabanka:types:EATypes:003\"><soapenv:Header/><soapenv:Body><urn:ManageContactsRequest><urn1:RequestAuditInfo><ChannelID>BRN</ChannelID><AppName>IFCA</AppName><WorkstationID>WBCUNI004</WorkstationID><PostTime>2023-02-01T09:28:34.968+02:00</PostTime><ClientID>4412397195922</ClientID><ReferenceID>1254d6b5c5991aedf21f08dde460b35e62790905</ReferenceID><SessionID>1254d6b5c5991aedf21f08dde460b35e62790905</SessionID><Subversion>0</Subversion></urn1:RequestAuditInfo><urn:BrandID>001</urn:BrandID><urn:BrandClientID>50418202202</urn:BrandClientID><urn:Version>7</urn:Version><urn:ContactsToUpdate><urn:ContactToUpdate><urn:ContactID>68280231623</urn:ContactID><urn:Phone><urn:Number>908400249</urn:Number></urn:Phone></urn:ContactToUpdate></urn:ContactsToUpdate></urn:ManageContactsRequest></soapenv:Body></soapenv:Envelope>");
             TextMessage message = session.createTextMessage("<soapenv:Envelope xmlns:soapenv=\"http://schemas.xmlsoap.org/soap/envelope/\"><soapenv:Header/><soapenv:Body xmlns:ns=\"http://dummy.namespace\"><urn:MyRequestDto xmlns:urn=\"http://example.com/\"><username>Janko</username><password>test</password></urn:MyRequestDto></soapenv:Body></soapenv:Envelope>");
-            
+            message.setJMSReplyTo(replyDestination);
             // Send the message
             producer.send(message);
-            System.out.println("Sent message: " + message.getText());
+            System.out.println("Request sent: " + message.getText());
             
             // Clean up
             producer.close();

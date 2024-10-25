@@ -11,19 +11,20 @@ public class LoggingHandler implements SOAPHandler<SOAPMessageContext> {
     
     public boolean handleMessage(SOAPMessageContext context) {
         Boolean outboundProperty = (Boolean) context.get(MessageContext.MESSAGE_OUTBOUND_PROPERTY);
+        System.out.println("Hello from LoggingHandler!");
         
-        if (outboundProperty) {
-            System.out.println("Outbound message:");
-        } else {
-            System.out.println("Inbound message:");
-        }
-        
-        // Log the SOAP message
-        try {
-			System.out.println(context.getMessage().getSOAPBody().getTextContent());
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+//        if (outboundProperty) {
+//            System.out.println("Outbound message:");
+//        } else {
+//            System.out.println("Inbound message:");
+//        }
+//        
+//        // Log the SOAP message
+//        try {
+//			System.out.println(context.getMessage().getSOAPBody().getTextContent());
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
         
         return true; // continue processing
     }
