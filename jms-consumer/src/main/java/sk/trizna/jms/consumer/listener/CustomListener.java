@@ -90,40 +90,40 @@ public class CustomListener implements MessageListener{
 	private void createService() {
 		JaxWsServerFactoryBean factory = new JaxWsServerFactoryBean();
 		factory.setServiceClass(ConsumerService.class);
-		factory.setServiceName(new QName("ConsumerService"));
+//		factory.setServiceName(new QName("ConsumerService"));
 		factory.setServiceBean(new ConsumerServiceImpl());
         factory.setAddress("local://ConsumerService"); // Use local address
-		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
+//		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
 //		factory.setHandlers(null);
 //		factory.setBus(BusFactory.newInstance().createBus());
 		// register local transport on bus
 		
-		Bus localBus = BusFactory.newInstance().createBus();
-		localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
-		
-		LocalTransportFactory transportFactory = new LocalTransportFactory();
-		DestinationFactoryManager dfm = localBus.getExtension(DestinationFactoryManager.class);
-		dfm.registerDestinationFactory(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-		ConduitInitiatorManager cim = localBus.getExtension(ConduitInitiatorManager.class);
-		cim.registerConduitInitiator(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-		// interceptors for conduit selection
-		factory.getOutInterceptors().add(new ConduitSetterInterceptor());
-		factory.getOutFaultInterceptors().add(new ConduitSetterInterceptor());
-		
-		factory.setBus(localBus);
+//		Bus localBus = BusFactory.newInstance().createBus();
+//		localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
+//		
+//		LocalTransportFactory transportFactory = new LocalTransportFactory();
+//		DestinationFactoryManager dfm = localBus.getExtension(DestinationFactoryManager.class);
+//		dfm.registerDestinationFactory(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
+//		ConduitInitiatorManager cim = localBus.getExtension(ConduitInitiatorManager.class);
+//		cim.registerConduitInitiator(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
+//		// interceptors for conduit selection
+//		factory.getOutInterceptors().add(new ConduitSetterInterceptor());
+//		factory.getOutFaultInterceptors().add(new ConduitSetterInterceptor());
+//		
+//		factory.setBus(localBus);
 		
 		// create & start
 		Server s = factory.create();
 		
-		try {
-			ServiceInfo serviceInfo = new ServiceInfo();
-	        EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-	        endpointInfo.setAddress("local://ConsumerService");
-			Destination destination = transportFactory.getDestination(endpointInfo, localBus);
-			destination.setMessageObserver(new MyMessageObserver());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+//		try {
+//			ServiceInfo serviceInfo = new ServiceInfo();
+//	        EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
+//	        endpointInfo.setAddress("local://ConsumerService");
+//			Destination destination = transportFactory.getDestination(endpointInfo, localBus);
+//			destination.setMessageObserver(new MyMessageObserver());
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
 		
 //		Endpoint endpoint = s.getEndpoint();
 //		EndpointImpl endpointImpl = (EndpointImpl) endpoint;
@@ -150,42 +150,42 @@ public class CustomListener implements MessageListener{
 //			e.printStackTrace();
 //		}
 		
-		s.start();
+//		s.start();
 	}
 	
 	private ConsumerService lookupService() {
 		JaxWsProxyFactoryBean factory = new JaxWsProxyFactoryBean();
 		factory.setServiceClass(ConsumerService.class);
-		factory.setServiceName(new QName("ConsumerService"));
+//		factory.setServiceName(new QName("ConsumerService"));
         factory.setAddress("local://ConsumerService"); // Use local address
-		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
+//		factory.setTransportId(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID);
 		
-		Bus localBus = BusFactory.newInstance().createBus();
-		localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
-		
-		LocalTransportFactory transportFactory = new LocalTransportFactory();
-		DestinationFactoryManager dfm = localBus.getExtension(DestinationFactoryManager.class);
-		dfm.registerDestinationFactory(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-		ConduitInitiatorManager cim = localBus.getExtension(ConduitInitiatorManager.class);
-		cim.registerConduitInitiator(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
-		
-		// interceptors for conduit selection
-		factory.getOutInterceptors().add(new ConduitSetterInterceptor());
-		factory.getOutFaultInterceptors().add(new ConduitSetterInterceptor());
-		
-		factory.setBus(localBus);
+//		Bus localBus = BusFactory.newInstance().createBus();
+//		localBus.getExtension(LocalTransportFactory.class); // Ensure LocalTransportFactory is present
+//		
+//		LocalTransportFactory transportFactory = new LocalTransportFactory();
+//		DestinationFactoryManager dfm = localBus.getExtension(DestinationFactoryManager.class);
+//		dfm.registerDestinationFactory(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
+//		ConduitInitiatorManager cim = localBus.getExtension(ConduitInitiatorManager.class);
+//		cim.registerConduitInitiator(JMSSpecConstants.SOAP_JMS_SPECIFICATION_TRANSPORTID, transportFactory);
+//		
+//		// interceptors for conduit selection
+//		factory.getOutInterceptors().add(new ConduitSetterInterceptor());
+//		factory.getOutFaultInterceptors().add(new ConduitSetterInterceptor());
+//		
+//		factory.setBus(localBus);
 		
 		ConsumerService service = (ConsumerService) factory.create();
 		
-		try {
-			ServiceInfo serviceInfo = new ServiceInfo();
-			EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
-			endpointInfo.setAddress("local://ConsumerService");
-			Destination destination = transportFactory.getDestination(endpointInfo, localBus);
-			destination.setMessageObserver(new MyMessageObserver());
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+//		try {
+//			ServiceInfo serviceInfo = new ServiceInfo();
+//			EndpointInfo endpointInfo = new EndpointInfo(serviceInfo, "local://ConsumerService");
+//			endpointInfo.setAddress("local://ConsumerService");
+//			Destination destination = transportFactory.getDestination(endpointInfo, localBus);
+//			destination.setMessageObserver(new MyMessageObserver());
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
 		
 //		try {
 //			ServiceInfo serviceInfo = new ServiceInfo();
